@@ -52,3 +52,13 @@ The presets recall waveform, frequency, and phase relationships for both sides a
 ![Lissajous presets](https://raw.githubusercontent.com/roiyaru-bokujin/Duatone/main/doc/lissajous.svg)
 
 `OVAL` | `FIGURE8` | `TREFOIL` | `TRIKNOT` | `ORBIT` | `DRIFT` | `ROSETTE`
+
+## Download
+
+Duatone is available via the community catalog on norns.local, or it can be installed manually in maiden:
+
+```sh
+;install https://github.com/roiyaru-bokujin/Duatone
+```
+
+After installation, restart your norns to enable the new engine.
