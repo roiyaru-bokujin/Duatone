@@ -19,7 +19,6 @@
 engine.name = "Duatone"
 
 local controlspec = require "controlspec"
-local UI = require "ui"
 local util = require "util"
 
 local WAVE_NAMES = { "SINE", "SQUARE", "TRI", "SAW" }
@@ -36,8 +35,6 @@ local VOLUME_MIN = 0.0
 local VOLUME_MAX = 1.0
 local DEFAULT_SWEEP_MODE = 1
 local SWEEP_MODE_NAMES = { "WRAP", "PING-PONG" }
-local PLAY_STATUS = 1
-local STOP_STATUS = 4
 local DIM_LEVEL = 2
 local VOLUME_ICON_BITS = { 0x08, 0x4c, 0x8f, 0xaf, 0xaf, 0x8f, 0x4c, 0x08 }
 local VOLUME_MUTE_ICON_BITS = { 0x08, 0x0c, 0xaf, 0x4f, 0x4f, 0xaf, 0x0c, 0x08 }
@@ -113,14 +110,8 @@ local state = {
   preset_dirty = false,
   sweep_mode = DEFAULT_SWEEP_MODE,
   channel = {
-    { wave = 1, freq = 220.0, phase = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0, playing = true },
-    { wave = 2, freq = 220.0, phase = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0, playing = true },
-    },
-  ui = {
-    play_icon = {
-      UI.PlaybackIcon.new(0, 0, 6, PLAY_STATUS),
-      UI.PlaybackIcon.new(0, 0, 6, PLAY_STATUS),
-    },
+    { wave = 1, freq = 220.0, phase = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
+    { wave = 2, freq = 220.0, phase = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
   },
   center_mark_phase = 0,
   phase_clock = nil,
@@ -170,9 +161,6 @@ end
 
 local function effective_amp(channel)
   local voice = state.channel[channel]
-  if not voice.playing then
-    return 0
-  end
   return BASE_AMP * state.master * voice.volume
 end
 
@@ -223,14 +211,6 @@ end
 
 local function fmt_volume(value)
   return string.format("%d", math.floor(value * 100 + 0.5))
-end
-
-local function refresh_icons()
-  for i = 1, 2 do
-    local icon = state.ui.play_icon[i]
-    icon.status = state.channel[i].playing and PLAY_STATUS or STOP_STATUS
-    icon.active = (state.selected_side == i)
-  end
 end
 
 local function mark_custom()
@@ -292,7 +272,6 @@ end
 local function apply_state()
   apply_channel(1)
   apply_channel(2)
-  refresh_icons()
 end
 
 local function capture_and_set_dry_mix()
@@ -649,7 +628,6 @@ local function select_side(delta)
   else
     state.selected_side = wrap_index(state.selected_side + delta, 2)
   end
-  refresh_icons()
 end
 
 local function adjust_wave(channel, delta)
@@ -696,13 +674,6 @@ local function adjust_phase(channel, delta)
   reset_mod_direction(channel)
   mark_custom()
   apply_channel(channel)
-end
-
-local function toggle_play(channel)
-  local voice = state.channel[channel]
-  voice.playing = not voice.playing
-  apply_channel(channel)
-  refresh_icons()
 end
 
 local function toggle_phase_mod(channel)
@@ -802,7 +773,7 @@ local function phase_tick()
 
   for channel = 1, 2 do
     local voice = state.channel[channel]
-    if voice.playing and voice.mod_enabled and voice.phase_rate ~= 0 then
+    if voice.mod_enabled and voice.phase_rate ~= 0 then
       local delta_phase = voice.phase_rate * dt
       local moved = false
       if state.sweep_mode == 1 then
@@ -825,7 +796,6 @@ end
 function init()
   capture_and_set_dry_mix()
   install_params()
-  refresh_icons()
   recall_preset(3)
   state.last_phase_tick = util.time()
   state.center_mark_phase = math.floor(state.last_phase_tick) % 2
@@ -861,10 +831,7 @@ function enc(n, delta)
 end
 
 function key(n, z)
-  if n == 1 and z == 1 and state.shift then
-    state.shift_used = true
-    toggle_play(state.selected_side)
-  elseif n == 2 then
+  if n == 2 then
     if z == 1 then
       state.shift = true
       state.shift_used = false
