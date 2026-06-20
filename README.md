@@ -1,6 +1,6 @@
 # Duatone
 
-![Duatone screenshot](screenshot.png)
+![Duatone screenshot](doc/cover.png)
 
 Duatone is a two-channel tone generator for norns built around phase, stereo placement, and simple waveform control.
 
@@ -56,7 +56,3 @@ Presets recall waveform, frequency, and phase relationships for both sides, whil
 - `ORBIT`
 - `DRIFT`
 - `ROSETTE`
-
-## License
-
-`GPL-3.0-or-later`
