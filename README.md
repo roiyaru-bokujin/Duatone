@@ -56,3 +56,7 @@ Presets recall waveform, frequency, and phase relationships for both sides, whil
 - `ORBIT`
 - `DRIFT`
 - `ROSETTE`
+
+## License
+
+`GPL-3.0-or-later`
