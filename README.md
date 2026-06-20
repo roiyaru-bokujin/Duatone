@@ -49,10 +49,6 @@ By default the voices are hard-panned left and right for oscilloscope viewing an
 
 The presets recall waveform, frequency, and phase relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Volume, pan, modulation depth, and sweep settings remain open for performance and refinement.
 
-- `OVAL`
-- `FIGURE8`
-- `TREFOIL`
-- `TRIKNOT`
-- `ORBIT`
-- `DRIFT`
-- `ROSETTE`
+![Lissajous presets](https://raw.githubusercontent.com/roiyaru-bokujin/Duatone/main/doc/lissajous.svg)
+
+`OVAL` | `FIGURE8` | `TREFOIL` | `TRIKNOT` | `ORBIT` | `DRIFT` | `ROSETTE`
