@@ -2,7 +2,7 @@
 
 ![Duatone screenshot](https://raw.githubusercontent.com/roiyaru-bokujin/Duatone/main/doc/cover.png)
 
-Duatone is a two-voice tone generator for norns made for shaping Lissajous figures and oscilloscope motion. By default the voices are panned left and right, making it easy to view each waveform separately while dialing in phase and frequency relationships.
+Duatone is a two-voice tone generator for Norns made for shaping Lissajous figures and oscilloscope motion. By default the voices are panned left and right, making it easy to view each waveform separately while dialing in phase and frequency relationships.
 
 ## Installation
 
