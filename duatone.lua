@@ -1,7 +1,7 @@
 -- duatone v1.2
 -- 2-channel tone generator
 --
--- by @good.sines
+-- by roiyaru
 --
 --
 --
