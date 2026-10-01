@@ -23,6 +23,7 @@ Restart norns after install so SuperCollider picks up `Engine_Duatone.sc`.
 - Per-side phase modulation with adjustable rate and span limits
 - Shared sweep modes: `WRAP` and `PING-PONG`
 - Seven presets tuned for Lissajous loops, knots, and geometric figures
+- Session-local preset editing, with an on-screen marker for changed presets
 - A focused screen layout that keeps the active side easy to read while editing
 
 ## Controls
@@ -35,6 +36,7 @@ Restart norns after install so SuperCollider picks up `Engine_Duatone.sc`.
 - hold `K2` + `E3`: adjust the selected side's volume
 - tap `K3`: toggle phase modulation for the selected side
 - hold `K3` + `E2`: disable modulation and set a manual phase
+- hold `K2` + `K3` for one second: restore the current preset
 
 ## Parameters
 
@@ -42,12 +44,15 @@ Restart norns after install so SuperCollider picks up `Engine_Duatone.sc`.
 - Modulation: `phase sweep`, `L mod rate`, `R mod rate`
 - Modulation spans: `L mod span min`, `L mod span max`, `R mod span min`, `R mod span max`
 - Stereo placement: `L pan`, `R pan`
+- Presets: `reset all presets`
 
 By default the voices are hard-panned left and right for oscilloscope viewing and Lissajous shaping. Set both pan controls to `0` for dual-mono output.
 
 ## Presets
 
-The presets recall waveform, frequency, and phase relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Volume, pan, modulation depth, and sweep settings remain open for performance and refinement.
+The presets recall waveform, frequency, phase, and phase-modulation relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Edits remain attached to each preset while the script is running, so moving between presets with `E1` does not discard them. A short line above a preset dot indicates that it has been edited; hold `K2` + `K3` for one second to restore the current preset, or use `reset all presets` in the parameters menu to restore the full bank. Preset edits return to their factory values when the script restarts.
+
+Volume, pan, modulation spans, and sweep mode remain global performance settings and are not restored by preset resets.
 
 ![Lissajous presets](https://raw.githubusercontent.com/roiyaru-bokujin/Duatone/main/doc/lissajous.svg)
 

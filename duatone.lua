@@ -1,4 +1,4 @@
--- duatone v1.2
+-- duatone v1.3
 -- 2-channel tone generator
 --
 -- by roiyaru
@@ -15,6 +15,7 @@
 -- k2+e3 changes volume
 -- k3 toggles phase motion
 -- k3+e2 manual phase adjust
+-- hold k2+k3 resets current preset
 
 engine.name = "Duatone"
 
@@ -36,6 +37,8 @@ local VOLUME_MAX = 1.0
 local DEFAULT_SWEEP_MODE = 1
 local SWEEP_MODE_NAMES = { "WRAP", "PING-PONG" }
 local DIM_LEVEL = 2
+local RESET_HOLD_SECONDS = 1
+local NOTICE_SECONDS = 2
 local VOLUME_ICON_BITS = { 0x08, 0x4c, 0x8f, 0xaf, 0xaf, 0x8f, 0x4c, 0x08 }
 local VOLUME_MUTE_ICON_BITS = { 0x08, 0x0c, 0xaf, 0x4f, 0x4f, 0xaf, 0x0c, 0x08 }
 local SINGLE_NOTE_BITS = { 0x08, 0x18, 0x28, 0x08, 0x08, 0x0e, 0x0d, 0x0f, 0x06 }
@@ -46,7 +49,7 @@ local WAVE_ICON_BITS = {
   { 0x0100, 0x01c0, 0x0130, 0x010c, 0x0703 },
 }
 
-local PRESETS = {
+local FACTORY_PRESETS = {
   {
     name = "OVAL",
     channel = {
@@ -98,6 +101,33 @@ local PRESETS = {
   },
 }
 
+local function copy_preset(preset)
+  local slot = { name = preset.name, channel = {} }
+  for channel = 1, 2 do
+    local source = preset.channel[channel]
+    local phase_rate = source.phase_rate or 0
+    slot.channel[channel] = {
+      wave = source.wave,
+      freq = source.freq,
+      phase = source.phase,
+      phase_rate = phase_rate,
+      default_phase_rate = phase_rate == 0 and 12 or phase_rate,
+      mod_enabled = phase_rate ~= 0,
+    }
+  end
+  return slot
+end
+
+local function make_preset_slots()
+  local slots = {}
+  for index, preset in ipairs(FACTORY_PRESETS) do
+    slots[index] = copy_preset(preset)
+  end
+  return slots
+end
+
+local preset_slots = make_preset_slots()
+
 local state = {
   selected_side = 1,
   shift = false,
@@ -105,13 +135,20 @@ local state = {
   volume_hold = false,
   phase_hold = false,
   phase_used = false,
+  k2_down = false,
+  k3_down = false,
+  reset_chord_active = false,
+  reset_chord_consumed = false,
+  reset_chord_task = nil,
+  notice_text = nil,
+  notice_generation = 0,
+  notice_task = nil,
   master = 1.0,
   preset_index = 3,
-  preset_dirty = false,
   sweep_mode = DEFAULT_SWEEP_MODE,
   channel = {
-    { wave = 1, freq = 220.0, phase = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
-    { wave = 2, freq = 220.0, phase = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
+    { wave = 1, freq = 220.0, phase = 0, phase_home = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
+    { wave = 2, freq = 220.0, phase = 0, phase_home = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
   },
   center_mark_phase = 0,
   phase_clock = nil,
@@ -213,11 +250,32 @@ local function fmt_volume(value)
   return string.format("%d", math.floor(value * 100 + 0.5))
 end
 
-local function mark_custom()
-  state.preset_dirty = true
+local function current_preset_channel(channel)
+  return preset_slots[state.preset_index].channel[channel]
+end
+
+local function preset_is_dirty(index)
+  local slot = preset_slots[index]
+  local factory = FACTORY_PRESETS[index]
+  for channel = 1, 2 do
+    local current = slot.channel[channel]
+    local original = factory.channel[channel]
+    local original_rate = original.phase_rate or 0
+    local original_default_rate = original_rate == 0 and 12 or original_rate
+    if current.wave ~= original.wave
+      or current.freq ~= original.freq
+      or current.phase ~= original.phase
+      or current.phase_rate ~= original_rate
+      or current.default_phase_rate ~= original_default_rate
+      or current.mod_enabled ~= (original_rate ~= 0) then
+      return true
+    end
+  end
+  return false
 end
 
 local apply_channel
+local reset_all_presets
 
 local function reset_mod_direction(channel)
   local voice = state.channel[channel]
@@ -334,9 +392,14 @@ end
 local function draw_preset_dots(index, count, x, y, spacing)
   local start_x = x - (((count - 1) * spacing) / 2)
   for i = 1, count do
+    local dot_x = start_x + ((i - 1) * spacing)
     screen.level(i == index and 15 or DIM_LEVEL)
-    screen.rect(start_x + ((i - 1) * spacing), y, 2, 2)
+    screen.rect(dot_x, y, 2, 2)
     screen.fill()
+    if preset_is_dirty(i) then
+      screen.rect(dot_x, y - 2, 2, 1)
+      screen.fill()
+    end
   end
 end
 
@@ -412,7 +475,7 @@ local function draw_channel_disc(channel, cx, cy, active)
 end
 
 local function draw_footer()
-  draw_preset_dots(state.preset_index, #PRESETS, 62, 61, 4)
+  draw_preset_dots(state.preset_index, #FACTORY_PRESETS, 62, 61, 4)
 end
 
 local function draw_center_mark(cx, y)
@@ -496,6 +559,11 @@ local function install_params()
     if state.channel[1].phase_rate > 0 then
       state.channel[1].default_phase_rate = state.channel[1].phase_rate
     end
+    if not syncing_param then
+      local preset_voice = current_preset_channel(1)
+      preset_voice.phase_rate = state.channel[1].phase_rate
+      preset_voice.default_phase_rate = state.channel[1].default_phase_rate
+    end
     redraw()
   end)
 
@@ -508,6 +576,11 @@ local function install_params()
     state.channel[2].phase_rate = round_step(value, 0.5)
     if state.channel[2].phase_rate > 0 then
       state.channel[2].default_phase_rate = state.channel[2].phase_rate
+    end
+    if not syncing_param then
+      local preset_voice = current_preset_channel(2)
+      preset_voice.phase_rate = state.channel[2].phase_rate
+      preset_voice.default_phase_rate = state.channel[2].default_phase_rate
     end
     redraw()
   end)
@@ -578,6 +651,12 @@ local function install_params()
     redraw()
   end)
 
+  params:add_separator("duatone_presets", "duatone presets")
+  params:add_trigger("reset_all_presets", "reset all presets")
+  params:set_action("reset_all_presets", function()
+    reset_all_presets()
+  end)
+
   params_ready = true
   sync_param("l_volume", state.channel[1].volume * 100)
   sync_param("r_volume", state.channel[2].volume * 100)
@@ -592,33 +671,46 @@ local function install_params()
 end
 
 local function recall_preset(index)
-  local preset = PRESETS[index]
+  local preset = preset_slots[index]
   for channel = 1, 2 do
     local source = preset.channel[channel]
     local target = state.channel[channel]
     target.wave = source.wave
     target.freq = source.freq
     target.phase = source.phase
+    target.phase_home = source.phase
     target.phase_rate = source.phase_rate or 0
-    target.default_phase_rate = source.phase_rate == 0 and 12 or source.phase_rate
-    target.mod_enabled = target.phase_rate ~= 0
+    target.default_phase_rate = source.default_phase_rate
+    target.mod_enabled = source.mod_enabled
     reset_mod_direction(channel)
     if target.mod_enabled and not phase_in_mod_bounds(target) then
       move_phase_to_mod_min(channel)
     end
   end
   state.preset_index = index
-  state.preset_dirty = false
   sync_param("l_mod_rate", state.channel[1].phase_rate)
   sync_param("r_mod_rate", state.channel[2].phase_rate)
   apply_state()
+end
+
+local function reset_preset(index)
+  preset_slots[index] = copy_preset(FACTORY_PRESETS[index])
+  if index == state.preset_index then
+    recall_preset(index)
+  end
+end
+
+reset_all_presets = function()
+  preset_slots = make_preset_slots()
+  recall_preset(state.preset_index)
+  redraw()
 end
 
 local function step_preset(delta)
   if delta == 0 then
     return
   end
-  local next_index = wrap_index(state.preset_index + delta, #PRESETS)
+  local next_index = wrap_index(state.preset_index + delta, #FACTORY_PRESETS)
   recall_preset(next_index)
 end
 
@@ -635,7 +727,7 @@ local function adjust_wave(channel, delta)
     return
   end
   state.channel[channel].wave = wrap_index(state.channel[channel].wave + delta, #WAVE_NAMES)
-  mark_custom()
+  current_preset_channel(channel).wave = state.channel[channel].wave
   apply_channel(channel)
 end
 
@@ -650,7 +742,7 @@ local function adjust_freq(channel, delta, fine)
     freq = freq * math.pow(2, delta / 36)
   end
   state.channel[channel].freq = util.clamp(round_step(freq, 0.1), FREQ_MIN, FREQ_MAX)
-  mark_custom()
+  current_preset_channel(channel).freq = state.channel[channel].freq
   apply_channel(channel)
 end
 
@@ -670,14 +762,18 @@ local function adjust_phase(channel, delta)
   local phase = state.channel[channel].phase + (delta * step)
   local voice = state.channel[channel]
   voice.phase = wrap_phase(phase)
+  voice.phase_home = voice.phase
   voice.mod_enabled = false
+  local preset_voice = current_preset_channel(channel)
+  preset_voice.phase = voice.phase_home
+  preset_voice.mod_enabled = false
   reset_mod_direction(channel)
-  mark_custom()
   apply_channel(channel)
 end
 
 local function toggle_phase_mod(channel)
   local voice = state.channel[channel]
+  local enabling = not voice.mod_enabled
   if voice.phase_rate == 0 then
     voice.phase_rate = voice.default_phase_rate
     sync_param(channel == 1 and "l_mod_rate" or "r_mod_rate", voice.phase_rate)
@@ -687,11 +783,23 @@ local function toggle_phase_mod(channel)
     voice.default_phase_rate = 12
     sync_param(channel == 1 and "l_mod_rate" or "r_mod_rate", voice.phase_rate)
   end
-  if not voice.mod_enabled and not phase_in_mod_bounds(voice) then
-    move_phase_to_mod_min(channel)
+  if enabling then
+    voice.phase = voice.phase_home
+    if not phase_in_mod_bounds(voice) then
+      move_phase_to_mod_min(channel)
+    end
+    apply_channel(channel)
+  else
+    voice.phase = wrap_phase(math.floor(voice.phase + 0.5))
+    voice.phase_home = voice.phase
     apply_channel(channel)
   end
-  voice.mod_enabled = not voice.mod_enabled
+  voice.mod_enabled = enabling
+  local preset_voice = current_preset_channel(channel)
+  preset_voice.phase = voice.phase_home
+  preset_voice.phase_rate = voice.phase_rate
+  preset_voice.default_phase_rate = voice.default_phase_rate
+  preset_voice.mod_enabled = voice.mod_enabled
 end
 
 local function update_phase_wrap(voice, delta_phase)
@@ -730,6 +838,93 @@ local function update_phase_ping_pong(voice, delta_phase)
   return true
 end
 
+local function dismiss_notice()
+  if state.notice_text == nil then
+    return
+  end
+  state.notice_generation = state.notice_generation + 1
+  state.notice_text = nil
+  if state.notice_task ~= nil then
+    clock.cancel(state.notice_task)
+    state.notice_task = nil
+  end
+end
+
+local function show_notice(text)
+  dismiss_notice()
+  state.notice_generation = state.notice_generation + 1
+  local generation = state.notice_generation
+  state.notice_text = text
+  state.notice_task = clock.run(function()
+    clock.sleep(NOTICE_SECONDS)
+    if state.notice_generation == generation then
+      state.notice_text = nil
+      state.notice_task = nil
+      redraw()
+    end
+  end)
+end
+
+local function draw_notice()
+  if state.notice_text == nil then
+    return
+  end
+
+  screen.level(0)
+  screen.rect(27, 26, 74, 13)
+  screen.fill()
+
+  screen.level(15)
+  screen.rect(28, 27, 72, 11)
+  screen.stroke()
+  screen.move(64, 35)
+  screen.text_center(state.notice_text)
+end
+
+local function cancel_reset_chord_timer()
+  if state.reset_chord_task ~= nil then
+    clock.cancel(state.reset_chord_task)
+    state.reset_chord_task = nil
+  end
+  state.reset_chord_active = false
+end
+
+local function start_reset_chord()
+  if state.reset_chord_consumed then
+    return
+  end
+
+  state.reset_chord_active = true
+  state.reset_chord_consumed = true
+  state.shift_used = true
+  state.phase_used = true
+  state.phase_hold = false
+  state.volume_hold = false
+  state.reset_chord_task = clock.run(function()
+    clock.sleep(RESET_HOLD_SECONDS)
+    if state.reset_chord_active and state.k2_down and state.k3_down then
+      state.reset_chord_active = false
+      state.reset_chord_task = nil
+      reset_preset(state.preset_index)
+      show_notice("PRESET RESTORED")
+      redraw()
+    end
+  end)
+end
+
+local function release_reset_chord_if_finished()
+  if state.k2_down or state.k3_down then
+    return
+  end
+  cancel_reset_chord_timer()
+  state.reset_chord_consumed = false
+  state.shift = false
+  state.shift_used = false
+  state.volume_hold = false
+  state.phase_hold = false
+  state.phase_used = false
+end
+
 function redraw()
   screen.clear()
   screen.aa(0)
@@ -750,6 +945,7 @@ function redraw()
   draw_channel_disc(1, 33, 37, state.selected_side == 1)
   draw_channel_disc(2, 93, 37, state.selected_side == 2)
   draw_footer()
+  draw_notice()
 
   screen.update()
 end
@@ -794,6 +990,7 @@ local function phase_tick()
 end
 
 function init()
+  preset_slots = make_preset_slots()
   capture_and_set_dry_mix()
   install_params()
   recall_preset(3)
@@ -805,6 +1002,13 @@ function init()
 end
 
 function enc(n, delta)
+  if state.reset_chord_consumed then
+    return
+  end
+  if delta ~= 0 then
+    dismiss_notice()
+  end
+
   if n == 1 then
     step_preset(delta)
   elseif n == 2 then
@@ -831,6 +1035,31 @@ function enc(n, delta)
 end
 
 function key(n, z)
+  if n == 2 then
+    state.k2_down = z == 1
+  elseif n == 3 then
+    state.k3_down = z == 1
+  end
+
+  if state.reset_chord_consumed then
+    if z == 0 then
+      cancel_reset_chord_timer()
+      release_reset_chord_if_finished()
+    end
+    redraw()
+    return
+  end
+
+  if z == 1 and state.k2_down and state.k3_down then
+    start_reset_chord()
+    redraw()
+    return
+  end
+
+  if z == 1 then
+    dismiss_notice()
+  end
+
   if n == 2 then
     if z == 1 then
       state.shift = true
@@ -862,6 +1091,8 @@ function key(n, z)
 end
 
 function cleanup()
+  cancel_reset_chord_timer()
+  dismiss_notice()
   if state.phase_clock ~= nil then
     state.phase_clock:stop()
     state.phase_clock = nil
