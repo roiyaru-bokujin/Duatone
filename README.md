@@ -36,7 +36,7 @@ Restart norns after install so SuperCollider picks up `Engine_Duatone.sc`.
 - hold `K2` + `E3`: adjust the selected side's volume
 - tap `K3`: toggle phase modulation for the selected side
 - hold `K3` + `E2`: disable modulation and set a manual phase
-- hold `K2` + `K3` for one second: restore the current preset
+- hold `K2` + `K3` for one second: restore the current preset to its default values
 
 ## Parameters
 
@@ -49,7 +49,11 @@ By default the voices are hard-panned left and right for oscilloscope viewing an
 
 ## Presets
 
-The presets recall waveform, frequency, phase, and phase-modulation relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Edits remain attached to each preset while the script is running, so moving between presets with `E1` does not discard them. The Parameters menu identifies the active preset and exposes each side's modulation state and rate independently. Turning modulation off captures its current phase without changing its rate, so modulation can resume from that phase later. Phase is part of the preset's locked state only while factory modulation is off; while factory modulation is on, its moving phase is intentionally ignored by the edited-state comparison. A short line above a preset dot indicates that it has been edited; hold `K2` + `K3` for one second to restore the current preset. Preset edits return to their factory values when the script restarts.
+The presets recall waveform, frequency, phase, and phase-modulation relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Edits remain attached to each preset while the script is running, so moving between presets with `E1` does not discard them.
+
+Changing a preset's parameters marks it as edited with a short line above its preset dot. Changes are kept throughout the current session and reset when the script is reloaded.
+
+Hold `K2` + `K3` for one second to restore the current preset to its default values.
 
 Volume, pan, modulation spans, and sweep mode remain global performance settings and are not restored by preset resets.
 
