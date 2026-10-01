@@ -122,6 +122,7 @@ local function copy_preset(preset)
       wave = source.wave,
       freq = source.freq,
       phase = source.phase,
+      stopped_phase = source.phase,
       phase_rate = factory_mod_rate(source),
       mod_enabled = phase_rate ~= 0,
     }
@@ -272,9 +273,10 @@ local function preset_is_dirty(index)
     local current = slot.channel[channel]
     local original = factory.channel[channel]
     local original_rate = original.phase_rate or 0
+    local current_phase = current.mod_enabled and current.phase or current.stopped_phase
     if current.wave ~= original.wave
       or current.freq ~= original.freq
-      or current.phase ~= original.phase
+      or current_phase ~= original.phase
       or current.phase_rate ~= factory_mod_rate(original)
       or current.mod_enabled ~= (original_rate ~= 0) then
       return true
@@ -710,7 +712,7 @@ recall_preset = function(index)
     local target = state.channel[channel]
     target.wave = source.wave
     target.freq = source.freq
-    target.phase = source.phase
+    target.phase = source.mod_enabled and source.phase or source.stopped_phase
     target.phase_home = source.phase
     target.phase_rate = source.phase_rate
     target.mod_enabled = source.mod_enabled
@@ -795,6 +797,7 @@ local function adjust_phase(channel, delta)
   voice.mod_enabled = false
   local preset_voice = current_preset_channel(channel)
   preset_voice.phase = voice.phase_home
+  preset_voice.stopped_phase = voice.phase
   preset_voice.mod_enabled = false
   sync_param(channel == 1 and "l_mod_enabled" or "r_mod_enabled", 1)
   reset_mod_direction(channel)
@@ -811,19 +814,18 @@ set_phase_mod_enabled = function(channel, enabled, update_param)
   end
 
   if enabled then
-    voice.phase = voice.phase_home
     if not phase_in_mod_bounds(voice) then
       move_phase_to_mod_min(channel)
     end
     apply_channel(channel)
   else
     voice.phase = wrap_phase(math.floor(voice.phase + 0.5))
-    voice.phase_home = voice.phase
     apply_channel(channel)
   end
   voice.mod_enabled = enabled
   local preset_voice = current_preset_channel(channel)
   preset_voice.phase = voice.phase_home
+  preset_voice.stopped_phase = voice.phase
   preset_voice.phase_rate = voice.phase_rate
   preset_voice.mod_enabled = voice.mod_enabled
   if update_param then
