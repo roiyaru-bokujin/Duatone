@@ -275,7 +275,6 @@ local function preset_is_dirty(index)
 end
 
 local apply_channel
-local reset_all_presets
 
 local function reset_mod_direction(channel)
   local voice = state.channel[channel]
@@ -651,12 +650,6 @@ local function install_params()
     redraw()
   end)
 
-  params:add_separator("duatone_presets", "duatone presets")
-  params:add_trigger("reset_all_presets", "reset all presets")
-  params:set_action("reset_all_presets", function()
-    reset_all_presets()
-  end)
-
   params_ready = true
   sync_param("l_volume", state.channel[1].volume * 100)
   sync_param("r_volume", state.channel[2].volume * 100)
@@ -700,12 +693,6 @@ local function reset_preset(index)
   end
 end
 
-reset_all_presets = function()
-  preset_slots = make_preset_slots()
-  recall_preset(state.preset_index)
-  redraw()
-end
-
 local function step_preset(delta)
   if delta == 0 then
     return
@@ -737,11 +724,11 @@ local function adjust_freq(channel, delta, fine)
   end
   local freq = state.channel[channel].freq
   if fine then
-    freq = freq + (delta * 0.25)
+    freq = freq + delta
   else
     freq = freq * math.pow(2, delta / 36)
   end
-  state.channel[channel].freq = util.clamp(round_step(freq, 0.1), FREQ_MIN, FREQ_MAX)
+  state.channel[channel].freq = util.clamp(round_step(freq, 1), FREQ_MIN, FREQ_MAX)
   current_preset_channel(channel).freq = state.channel[channel].freq
   apply_channel(channel)
 end
@@ -758,7 +745,7 @@ local function adjust_phase(channel, delta)
   if delta == 0 then
     return
   end
-  local step = 3
+  local step = 1
   local phase = state.channel[channel].phase + (delta * step)
   local voice = state.channel[channel]
   voice.phase = wrap_phase(phase)
@@ -871,11 +858,11 @@ local function draw_notice()
   end
 
   screen.level(0)
-  screen.rect(27, 26, 74, 13)
+  screen.rect(28, 27, 74, 12)
   screen.fill()
 
   screen.level(15)
-  screen.rect(28, 27, 72, 11)
+  screen.rect(28, 27, 74, 12)
   screen.stroke()
   screen.move(64, 35)
   screen.text_center(state.notice_text)

@@ -44,13 +44,12 @@ Restart norns after install so SuperCollider picks up `Engine_Duatone.sc`.
 - Modulation: `phase sweep`, `L mod rate`, `R mod rate`
 - Modulation spans: `L mod span min`, `L mod span max`, `R mod span min`, `R mod span max`
 - Stereo placement: `L pan`, `R pan`
-- Presets: `reset all presets`
 
 By default the voices are hard-panned left and right for oscilloscope viewing and Lissajous shaping. Set both pan controls to `0` for dual-mono output.
 
 ## Presets
 
-The presets recall waveform, frequency, phase, and phase-modulation relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Edits remain attached to each preset while the script is running, so moving between presets with `E1` does not discard them. A short line above a preset dot indicates that it has been edited; hold `K2` + `K3` for one second to restore the current preset, or use `reset all presets` in the parameters menu to restore the full bank. Preset edits return to their factory values when the script restarts.
+The presets recall waveform, frequency, phase, and phase-modulation relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Edits remain attached to each preset while the script is running, so moving between presets with `E1` does not discard them. A short line above a preset dot indicates that it has been edited; hold `K2` + `K3` for one second to restore the current preset. Preset edits return to their factory values when the script restarts.
 
 Volume, pan, modulation spans, and sweep mode remain global performance settings and are not restored by preset resets.
 
