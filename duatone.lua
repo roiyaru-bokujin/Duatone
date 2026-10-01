@@ -121,7 +121,6 @@ local function copy_preset(preset)
     slot.channel[channel] = {
       wave = source.wave,
       freq = source.freq,
-      phase = source.phase,
       stopped_phase = source.phase,
       phase_rate = factory_mod_rate(source),
       mod_enabled = phase_rate ~= 0,
@@ -159,8 +158,8 @@ local state = {
   preset_index = 3,
   sweep_mode = DEFAULT_SWEEP_MODE,
   channel = {
-    { wave = 1, freq = 220.0, phase = 0, phase_home = 0, phase_rate = DEFAULT_MOD_RATE, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
-    { wave = 2, freq = 220.0, phase = 0, phase_home = 0, phase_rate = DEFAULT_MOD_RATE, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
+    { wave = 1, freq = 220.0, phase = 0, phase_rate = DEFAULT_MOD_RATE, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
+    { wave = 2, freq = 220.0, phase = 0, phase_rate = DEFAULT_MOD_RATE, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
   },
   center_mark_phase = 0,
   phase_clock = nil,
@@ -273,12 +272,15 @@ local function preset_is_dirty(index)
     local current = slot.channel[channel]
     local original = factory.channel[channel]
     local original_rate = original.phase_rate or 0
-    local current_phase = current.mod_enabled and current.phase or current.stopped_phase
+    local original_enabled = original_rate ~= 0
+    local stopped_phase_changed = not original_enabled
+      and not current.mod_enabled
+      and current.stopped_phase ~= original.phase
     if current.wave ~= original.wave
       or current.freq ~= original.freq
-      or current_phase ~= original.phase
+      or stopped_phase_changed
       or current.phase_rate ~= factory_mod_rate(original)
-      or current.mod_enabled ~= (original_rate ~= 0) then
+      or current.mod_enabled ~= original_enabled then
       return true
     end
   end
@@ -707,13 +709,13 @@ end
 
 recall_preset = function(index)
   local preset = preset_slots[index]
+  local factory = FACTORY_PRESETS[index]
   for channel = 1, 2 do
     local source = preset.channel[channel]
     local target = state.channel[channel]
     target.wave = source.wave
     target.freq = source.freq
-    target.phase = source.mod_enabled and source.phase or source.stopped_phase
-    target.phase_home = source.phase
+    target.phase = source.mod_enabled and factory.channel[channel].phase or source.stopped_phase
     target.phase_rate = source.phase_rate
     target.mod_enabled = source.mod_enabled
     reset_mod_direction(channel)
@@ -793,10 +795,8 @@ local function adjust_phase(channel, delta)
   local phase = state.channel[channel].phase + (delta * step)
   local voice = state.channel[channel]
   voice.phase = wrap_phase(phase)
-  voice.phase_home = voice.phase
   voice.mod_enabled = false
   local preset_voice = current_preset_channel(channel)
-  preset_voice.phase = voice.phase_home
   preset_voice.stopped_phase = voice.phase
   preset_voice.mod_enabled = false
   sync_param(channel == 1 and "l_mod_enabled" or "r_mod_enabled", 1)
@@ -824,7 +824,6 @@ set_phase_mod_enabled = function(channel, enabled, update_param)
   end
   voice.mod_enabled = enabled
   local preset_voice = current_preset_channel(channel)
-  preset_voice.phase = voice.phase_home
   preset_voice.stopped_phase = voice.phase
   preset_voice.phase_rate = voice.phase_rate
   preset_voice.mod_enabled = voice.mod_enabled
