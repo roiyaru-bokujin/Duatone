@@ -35,7 +35,9 @@ local PAN_MAX = 1.0
 local VOLUME_MIN = 0.0
 local VOLUME_MAX = 1.0
 local DEFAULT_SWEEP_MODE = 1
+local DEFAULT_MOD_RATE = 12
 local SWEEP_MODE_NAMES = { "WRAP", "PING-PONG" }
+local MOD_STATE_NAMES = { "OFF", "ON" }
 local DIM_LEVEL = 2
 local RESET_HOLD_SECONDS = 1
 local NOTICE_SECONDS = 2
@@ -101,6 +103,16 @@ local FACTORY_PRESETS = {
   },
 }
 
+local PRESET_NAMES = {}
+for index, preset in ipairs(FACTORY_PRESETS) do
+  PRESET_NAMES[index] = preset.name
+end
+
+local function factory_mod_rate(channel)
+  local rate = channel.phase_rate or 0
+  return rate == 0 and DEFAULT_MOD_RATE or rate
+end
+
 local function copy_preset(preset)
   local slot = { name = preset.name, channel = {} }
   for channel = 1, 2 do
@@ -110,8 +122,7 @@ local function copy_preset(preset)
       wave = source.wave,
       freq = source.freq,
       phase = source.phase,
-      phase_rate = phase_rate,
-      default_phase_rate = phase_rate == 0 and 12 or phase_rate,
+      phase_rate = factory_mod_rate(source),
       mod_enabled = phase_rate ~= 0,
     }
   end
@@ -147,8 +158,8 @@ local state = {
   preset_index = 3,
   sweep_mode = DEFAULT_SWEEP_MODE,
   channel = {
-    { wave = 1, freq = 220.0, phase = 0, phase_home = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
-    { wave = 2, freq = 220.0, phase = 0, phase_home = 0, phase_rate = 0, default_phase_rate = 0, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
+    { wave = 1, freq = 220.0, phase = 0, phase_home = 0, phase_rate = DEFAULT_MOD_RATE, mod_min = 0, mod_max = 360, pan = -1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
+    { wave = 2, freq = 220.0, phase = 0, phase_home = 0, phase_rate = DEFAULT_MOD_RATE, mod_min = 0, mod_max = 360, pan = 1.0, mod_enabled = false, mod_direction = 1, volume = 1.0 },
   },
   center_mark_phase = 0,
   phase_clock = nil,
@@ -261,12 +272,10 @@ local function preset_is_dirty(index)
     local current = slot.channel[channel]
     local original = factory.channel[channel]
     local original_rate = original.phase_rate or 0
-    local original_default_rate = original_rate == 0 and 12 or original_rate
     if current.wave ~= original.wave
       or current.freq ~= original.freq
       or current.phase ~= original.phase
-      or current.phase_rate ~= original_rate
-      or current.default_phase_rate ~= original_default_rate
+      or current.phase_rate ~= factory_mod_rate(original)
       or current.mod_enabled ~= (original_rate ~= 0) then
       return true
     end
@@ -275,6 +284,8 @@ local function preset_is_dirty(index)
 end
 
 local apply_channel
+local recall_preset
+local set_phase_mod_enabled
 
 local function reset_mod_direction(channel)
   local voice = state.channel[channel]
@@ -534,6 +545,14 @@ local function install_params()
 
   params:add_separator("duatone_mod", "duatone modulation")
 
+  params:add_option("active_preset", "Preset", PRESET_NAMES, state.preset_index)
+  params:set_action("active_preset", function(value)
+    if not syncing_param and value ~= state.preset_index then
+      recall_preset(value)
+      redraw()
+    end
+  end)
+
   params:add_option("phase_sweep", "phase sweep", SWEEP_MODE_NAMES, state.sweep_mode)
   params:set_action("phase_sweep", function(value)
     state.sweep_mode = value
@@ -548,6 +567,19 @@ local function install_params()
     redraw()
   end)
 
+  params:add_option(
+    "l_mod_enabled",
+    "L mod state",
+    MOD_STATE_NAMES,
+    state.channel[1].mod_enabled and 2 or 1
+  )
+  params:set_action("l_mod_enabled", function(value)
+    if not syncing_param then
+      set_phase_mod_enabled(1, value == 2, false)
+      redraw()
+    end
+  end)
+
   params:add_control(
     "l_mod_rate",
     "L mod rate",
@@ -555,15 +587,24 @@ local function install_params()
   )
   params:set_action("l_mod_rate", function(value)
     state.channel[1].phase_rate = round_step(value, 0.5)
-    if state.channel[1].phase_rate > 0 then
-      state.channel[1].default_phase_rate = state.channel[1].phase_rate
-    end
     if not syncing_param then
       local preset_voice = current_preset_channel(1)
       preset_voice.phase_rate = state.channel[1].phase_rate
-      preset_voice.default_phase_rate = state.channel[1].default_phase_rate
     end
     redraw()
+  end)
+
+  params:add_option(
+    "r_mod_enabled",
+    "R mod state",
+    MOD_STATE_NAMES,
+    state.channel[2].mod_enabled and 2 or 1
+  )
+  params:set_action("r_mod_enabled", function(value)
+    if not syncing_param then
+      set_phase_mod_enabled(2, value == 2, false)
+      redraw()
+    end
   end)
 
   params:add_control(
@@ -573,13 +614,9 @@ local function install_params()
   )
   params:set_action("r_mod_rate", function(value)
     state.channel[2].phase_rate = round_step(value, 0.5)
-    if state.channel[2].phase_rate > 0 then
-      state.channel[2].default_phase_rate = state.channel[2].phase_rate
-    end
     if not syncing_param then
       local preset_voice = current_preset_channel(2)
       preset_voice.phase_rate = state.channel[2].phase_rate
-      preset_voice.default_phase_rate = state.channel[2].default_phase_rate
     end
     redraw()
   end)
@@ -654,8 +691,11 @@ local function install_params()
   sync_param("l_volume", state.channel[1].volume * 100)
   sync_param("r_volume", state.channel[2].volume * 100)
   sync_param("global_volume", state.master * 100)
+  sync_param("active_preset", state.preset_index)
   sync_param("phase_sweep", state.sweep_mode)
+  sync_param("l_mod_enabled", state.channel[1].mod_enabled and 2 or 1)
   sync_param("l_mod_rate", state.channel[1].phase_rate)
+  sync_param("r_mod_enabled", state.channel[2].mod_enabled and 2 or 1)
   sync_param("r_mod_rate", state.channel[2].phase_rate)
   sync_mod_bounds(1)
   sync_mod_bounds(2)
@@ -663,7 +703,7 @@ local function install_params()
   sync_param("r_pan", state.channel[2].pan)
 end
 
-local function recall_preset(index)
+recall_preset = function(index)
   local preset = preset_slots[index]
   for channel = 1, 2 do
     local source = preset.channel[channel]
@@ -672,8 +712,7 @@ local function recall_preset(index)
     target.freq = source.freq
     target.phase = source.phase
     target.phase_home = source.phase
-    target.phase_rate = source.phase_rate or 0
-    target.default_phase_rate = source.default_phase_rate
+    target.phase_rate = source.phase_rate
     target.mod_enabled = source.mod_enabled
     reset_mod_direction(channel)
     if target.mod_enabled and not phase_in_mod_bounds(target) then
@@ -681,7 +720,10 @@ local function recall_preset(index)
     end
   end
   state.preset_index = index
+  sync_param("active_preset", state.preset_index)
+  sync_param("l_mod_enabled", state.channel[1].mod_enabled and 2 or 1)
   sync_param("l_mod_rate", state.channel[1].phase_rate)
+  sync_param("r_mod_enabled", state.channel[2].mod_enabled and 2 or 1)
   sync_param("r_mod_rate", state.channel[2].phase_rate)
   apply_state()
 end
@@ -754,23 +796,21 @@ local function adjust_phase(channel, delta)
   local preset_voice = current_preset_channel(channel)
   preset_voice.phase = voice.phase_home
   preset_voice.mod_enabled = false
+  sync_param(channel == 1 and "l_mod_enabled" or "r_mod_enabled", 1)
   reset_mod_direction(channel)
   apply_channel(channel)
 end
 
-local function toggle_phase_mod(channel)
+set_phase_mod_enabled = function(channel, enabled, update_param)
   local voice = state.channel[channel]
-  local enabling = not voice.mod_enabled
-  if voice.phase_rate == 0 then
-    voice.phase_rate = voice.default_phase_rate
-    sync_param(channel == 1 and "l_mod_rate" or "r_mod_rate", voice.phase_rate)
+  if voice.mod_enabled == enabled then
+    if update_param then
+      sync_param(channel == 1 and "l_mod_enabled" or "r_mod_enabled", enabled and 2 or 1)
+    end
+    return
   end
-  if voice.phase_rate == 0 then
-    voice.phase_rate = 12
-    voice.default_phase_rate = 12
-    sync_param(channel == 1 and "l_mod_rate" or "r_mod_rate", voice.phase_rate)
-  end
-  if enabling then
+
+  if enabled then
     voice.phase = voice.phase_home
     if not phase_in_mod_bounds(voice) then
       move_phase_to_mod_min(channel)
@@ -781,12 +821,18 @@ local function toggle_phase_mod(channel)
     voice.phase_home = voice.phase
     apply_channel(channel)
   end
-  voice.mod_enabled = enabling
+  voice.mod_enabled = enabled
   local preset_voice = current_preset_channel(channel)
   preset_voice.phase = voice.phase_home
   preset_voice.phase_rate = voice.phase_rate
-  preset_voice.default_phase_rate = voice.default_phase_rate
   preset_voice.mod_enabled = voice.mod_enabled
+  if update_param then
+    sync_param(channel == 1 and "l_mod_enabled" or "r_mod_enabled", enabled and 2 or 1)
+  end
+end
+
+local function toggle_phase_mod(channel)
+  set_phase_mod_enabled(channel, not state.channel[channel].mod_enabled, true)
 end
 
 local function update_phase_wrap(voice, delta_phase)

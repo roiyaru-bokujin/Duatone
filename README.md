@@ -41,7 +41,7 @@ Restart norns after install so SuperCollider picks up `Engine_Duatone.sc`.
 ## Parameters
 
 - Levels: `L volume`, `R volume`, `global volume`
-- Modulation: `phase sweep`, `L mod rate`, `R mod rate`
+- Modulation: active `Preset`, `phase sweep`, per-preset `L mod state`, `L mod rate`, `R mod state`, and `R mod rate`
 - Modulation spans: `L mod span min`, `L mod span max`, `R mod span min`, `R mod span max`
 - Stereo placement: `L pan`, `R pan`
 
@@ -49,7 +49,7 @@ By default the voices are hard-panned left and right for oscilloscope viewing an
 
 ## Presets
 
-The presets recall waveform, frequency, phase, and phase-modulation relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Edits remain attached to each preset while the script is running, so moving between presets with `E1` does not discard them. A short line above a preset dot indicates that it has been edited; hold `K2` + `K3` for one second to restore the current preset. Preset edits return to their factory values when the script restarts.
+The presets recall waveform, frequency, phase, and phase-modulation relationships for both sides as starting points for different Lissajous knots, loops, and geometric figures. Edits remain attached to each preset while the script is running, so moving between presets with `E1` does not discard them. The Parameters menu identifies the active preset and exposes each side's modulation state and rate independently. Turning modulation off captures its current phase without changing its rate, so modulation can resume from that phase later. A short line above a preset dot indicates that it has been edited; hold `K2` + `K3` for one second to restore the current preset. Preset edits return to their factory values when the script restarts.
 
 Volume, pan, modulation spans, and sweep mode remain global performance settings and are not restored by preset resets.
 
